@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask-Webseite</title>
+</head>
+<body>
+    <h1>Willkommen auf meiner Webseite</h1>
+    <p>Du kannst hier Vokabeln lernen oder der Webseite beibringen</p>
+    <p>Beschwerden bitte an Fussilila690@gmail.com senden</p>
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vokabeltrainer</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 50px; padding: 20px; background-color: #f4f4f4; }
+            input, button { padding: 10px; margin: 10px 0; font-size: 16px; }
+            .result, .quiz, .message, .vocabulary-list, .chapter-list { margin-top: 20px; font-weight: bold; }
+            ul { list-style-type: none; padding: 0; }
+            li { margin-bottom: 10px; }
+            button { cursor: pointer; }
+            .chapter { margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+    
+        <h1>Vokabeltrainer: Deutsch nach Englisch</h1>
+    
+        <!-- Neues Kapitel erstellen -->
+        <div>
+            <label for="newChapter">Neues Kapitel erstellen:</label>
+            <input type="text" id="newChapter" placeholder="Kapitelname eingeben">
+            <button onclick="verifyCode('addChapter')">Kapitel erstellen</button>
+        </div>
+    
+        <!-- Kapitel- und Vokabelaktionen -->
+        <div class="chapter-list">
+            <h2>Kapitel</h2>
+            <ul id="chapterDisplay"></ul> <!-- Liste für Kapitel -->
+        </div>
+    
+        <div class="message" id="message"></div>
+        <div class="quiz" id="quiz"></div>
+        <div class="result" id="result"></div>
+    
+        <!-- Liste der Vokabeln -->
+        <div class="vocabulary-list">
+            <h2>Vokabeln im ausgewählten Kapitel:</h2>
+            <ul id="vocabularyDisplay"></ul> <!-- Liste für Vokabeln -->
+        </div>
+    
+        <script>
+            // Sicherheitscode
+            const SECURITY_CODE = '2468';
+    
+            // Kapitel und Vokabeln aus dem LocalStorage laden oder initialisieren
+            let chapters = JSON.parse(localStorage.getItem('chapters')) || {}; // Kapitel: {"Kapitel 1": ["Vokabel1", "Vokabel2"]}
+            let currentChapter = null;  // Aktuell ausgewähltes Kapitel
+            let totalRounds = 0;
+            let currentWord = '';
+            let correctTranslation = '';
+    
+            // Variablen für richtige und falsche Antworten
+            let correctAnswers = 0;
+            let incorrectAnswers = 0;
+    
+            // Modus (true = Schreiben, false = Auswahl)
+            let isWriteMode = true;
+    
+            // Funktion zum Wechseln des Modus
+            function toggleMode() {
+                isWriteMode = !isWriteMode;
+                document.getElementById('message').innerHTML = `Modus gewechselt zu: ${isWriteMode ? 'Schreiben' : 'Auswahl'}`;
+            }
+    
+            // Funktion zum Überprüfen des Codes
+            function verifyCode(action, chapter = null, word = null) {
+                const code = prompt("Bitte gib den Sicherheitscode ein:");
+                if (code === SECURITY_CODE) {
+                    if (action === 'addChapter') {
+                        addChapter();
+                    } else if (action === 'addVocabulary') {
+                        addVocabulary(chapter);
+                    } else if (action === 'deleteChapter') {
+                        deleteChapter(chapter);
+                    } else if (action === 'deleteVocabulary') {
+                        deleteVocabulary(chapter, word);
+                    }
+                } else {
+                    document.getElementById('message').innerHTML = "Falscher Code!";
+                }
+            }
+    
+            // Funktion zum Hinzufügen eines neuen Kapitels
+            function addChapter() {
+                const newChapter = document.getElementById('newChapter').value.trim();
+                if (newChapter && !chapters[newChapter]) {
+                    chapters[newChapter] = []; // Leere Liste für Vokabeln in diesem Kapitel
+                    localStorage.setItem('chapters', JSON.stringify(chapters)); // Kapitel in LocalStorage speichern
+    
+                    document.getElementById('message').innerHTML = `Kapitel "${newChapter}" wurde erstellt!`;
+                    document.getElementById('newChapter').value = '';
+    
+                    updateChapterDisplay();
+                } else {
+                    document.getElementById('message').innerHTML = "Bitte einen gültigen Kapitelnamen eingeben!";
+                }
+            }
+    
+            // Funktion zum Hinzufügen neuer Vokabeln in das gewählte Kapitel
+            function addVocabulary(chapter) {
+                const newWord = prompt("Gib eine neue Vokabel ein:", "");
+                if (newWord && chapter) {
+                    chapters[chapter].push(newWord);
+                    localStorage.setItem('chapters', JSON.stringify(chapters)); // Kapitel in LocalStorage speichern
+    
+                    document.getElementById('message').innerHTML = `Wort "${newWord}" wurde zu Kapitel "${chapter}" hinzugefügt!`;
+    
+                    updateVocabularyDisplay(chapter);
+                } else {
+                    document.getElementById('message').innerHTML = "Keine gültige Vokabel eingegeben.";
+                }
+            }
+    
+            // Funktion zum Starten der zufälligen Vokabelabfrage aus dem gewählten Kapitel
+            async function startQuiz(chapter) {
+                if (!chapter || chapters[chapter].length === 0) {
+                    document.getElementById('message').innerHTML = `Keine Vokabeln im Kapitel "${chapter}" vorhanden.`;
+                    return;
+                }
+    
+                // Zufällige Vokabel aus dem gewählten Kapitel auswählen
+                const randomIndex = Math.floor(Math.random() * chapters[chapter].length);
+                currentWord = chapters[chapter][randomIndex];
+                correctTranslation = await translateToEnglish(currentWord);
+    
+                if (isWriteMode) {
+                    // Schreibmodus
+                    document.getElementById('quiz').innerHTML = `
+                        Übersetze ins Englische: <strong>${currentWord}</strong><br>
+                        <input type="text" id="userAnswer" placeholder="Englische Übersetzung">
+                        <button onclick="checkAnswer()">Überprüfen</button>
+                    `;
+                } else {
+                    // Auswahlmodus
+                    let randomWords = await generateRandomTranslations(chapter);
+    
+                    // Die richtige Übersetzung an eine zufällige Stelle in den Antwortmöglichkeiten setzen
+                    const randomPosition = Math.floor(Math.random() * 4);
+                    randomWords.splice(randomPosition, 0, correctTranslation); // Richtige Antwort einfügen
+    
+                    // Antwortmöglichkeiten als Buttons anzeigen
+                    let answerButtons = '';
+                    randomWords.forEach((word, index) => {
+                        answerButtons += `<button onclick="checkAnswer('${word}')">${word}</button> `;
+                    });
+    
+                    document.getElementById('quiz').innerHTML = `
+                        Übersetze ins Englische: <strong>${currentWord}</strong><br>
+                        ${answerButtons}
+                    `;
+                }
+                document.getElementById('result').innerHTML = '';
+            }
+    
+            // Funktion zur Generierung von falschen Übersetzungen
+            async function generateRandomTranslations(chapter) {
+                let randomTranslations = [];
+                while (randomTranslations.length < 3) {
+                    const randomIndex = Math.floor(Math.random() * chapters[chapter].length);
+                    const randomWord = chapters[chapter][randomIndex];
+                    const randomTranslation = await translateToEnglish(randomWord);
+                    if (!randomTranslations.includes(randomTranslation) && randomTranslation !== correctTranslation) {
+                        randomTranslations.push(randomTranslation);
+                    }
+                }
+                return randomTranslations;
+            }
+    
+            // Übersetzung mit API
+            async function translateToEnglish(word) {
+                try {
+                    const response = await fetch(`https://api.mymemory.translated.net/get?q=${word}&langpair=de|en`);
+                    const data = await response.json();
+                    return data.responseData.translatedText;
+                } catch (error) {
+                    console.error("Fehler bei der Übersetzung:", error);
+                    return "Übersetzung fehlgeschlagen";
+                }
+            }
+    
+            // Funktion zur Überprüfung der Antwort (für den Schreibmodus)
+            function checkAnswer(selectedAnswer = null) {
+                let userAnswer = selectedAnswer;
+                if (isWriteMode) {
+                    userAnswer = document.getElementById('userAnswer').value.trim().toLowerCase();
+                }
+    
+                if (userAnswer === correctTranslation.toLowerCase()) {
+                    document.getElementById('result').innerHTML = "Richtig! Gut gemacht!";
+                    correctAnswers++; // Richtige Antwort
+                } else {
+                    document.getElementById('result').innerHTML = `Falsch! Die richtige Antwort ist: ${correctTranslation}`;
+                    incorrectAnswers++; // Falsche Antwort
+                }
+            }
+    
+            // Funktion zum Anzeigen der Anzahl der richtigen und falschen Antworten
+            function showResults(chapter) {
+                document.getElementById('message').innerHTML = `
+                    Richtige Antworten: ${correctAnswers}<br>
+                    Falsche Antworten: ${incorrectAnswers} im Kapitel "${chapter}".
+                `;
+            }
+    
+            // Funktion zum Löschen eines Kapitels
+            function deleteChapter(chapter) {
+                if (confirm(`Kapitel "${chapter}" wirklich löschen?`)) {
+                    delete chapters[chapter]; // Kapitel löschen
+                    localStorage.setItem('chapters', JSON.stringify(chapters)); // Kapitel im LocalStorage aktualisieren
+                    updateChapterDisplay();
+                    document.getElementById('message').innerHTML = `Kapitel "${chapter}" wurde gelöscht!`;
+                }
+            }
+    
+            // Funktion zum Löschen einer Vokabel in einem Kapitel
+            function deleteVocabulary(chapter, word) {
+                if (confirm(`Vokabel "${word}" aus Kapitel "${chapter}" wirklich löschen?`)) {
+                    chapters[chapter] = chapters[chapter].filter(vocab => vocab !== word); // Vokabel löschen
+                    localStorage.setItem('chapters', JSON.stringify(chapters)); // Kapitel im LocalStorage aktualisieren
+                    updateVocabularyDisplay(chapter);
+                    document.getElementById('message').innerHTML = `Vokabel "${word}" wurde aus Kapitel "${chapter}" gelöscht!`;
+                }
+            }
+    
+            // Funktion zum Anzeigen der Kapitel und Buttons für Aktionen
+            function updateChapterDisplay() {
+                const chapterDisplay = document.getElementById('chapterDisplay');
+                chapterDisplay.innerHTML = ''; // Vorherige Liste löschen
+    
+                Object.keys(chapters).forEach((chapter) => {
+                    const li = document.createElement('li');
+                    li.className = "chapter";
+                    li.innerHTML = `
+                        <strong>${chapter}</strong><br>
+                        <button onclick="verifyCode('addVocabulary', '${chapter}')">Vokabel hinzufügen</button>
+                        <button onclick="startQuiz('${chapter}')">Vokabeln abfragen</button>
+                        <button onclick="showResults('${chapter}')">Ergebnisse anzeigen</button>
+                        <button onclick="verifyCode('deleteChapter', '${chapter}')">Kapitel löschen</button>
+                    `;
+                    chapterDisplay.appendChild(li);
+                });
+            }
+    
+            // Funktion zum Anzeigen der Vokabelliste des gewählten Kapitels
+            function updateVocabularyDisplay(chapter) {
+                const vocabularyDisplay = document.getElementById('vocabularyDisplay');
+                vocabularyDisplay.innerHTML = ''; // Vorherige Liste löschen
+    
+                if (chapter && chapters[chapter].length > 0) {
+                    chapters[chapter].forEach((word) => {
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            ${word} 
+                            <button onclick="verifyCode('deleteVocabulary', '${chapter}', '${word}')">Löschen</button>
+                        `;
+                        vocabularyDisplay.appendChild(li);
+                    });
+                } else {
+                    vocabularyDisplay.innerHTML = "<li>Keine Vokabeln im Kapitel</li>";
+                }
+            }
+    
+            // Beim Laden der Seite die Kapitel anzeigen
+            window.onload = updateChapterDisplay;
+        </script>
+    
+    </body>
+    </html>
+    
+</body>
+</html>
